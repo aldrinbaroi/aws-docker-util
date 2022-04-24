@@ -1,0 +1,25 @@
+#!/bin/bash
+
+[[ -z ${AWS_PROFILE// /} ]] && AWS_PROFILE="default"
+[[ -z ${AWS_CONFIG_DIR// /} ]] && AWS_CONFIG_DIR="$HOME/.aws"
+
+readonly CONFIG_FILE="$AWS_CONFIG_DIR/config" 
+readonly CREDENTIAL_FILE="$AWS_CONFIG_DIR/credentials"
+readonly AWS_REGION=$(iniget $CONFIG_FILE $AWS_PROFILE region)
+readonly AWS_ACCESS_KEY_ID=$(iniget $CREDENTIAL_FILE $AWS_PROFILE aws_access_key_id)
+readonly AWS_SECRET_ACCESS_KEY=$(iniget $CREDENTIAL_FILE $AWS_PROFILE aws_secret_access_key)
+
+cat << INFO
+=================================================
+AWS_PROFILE = $AWS_PROFILE
+AWS_REGION  = $AWS_REGION
+=================================================
+INFO
+
+docker run --rm \
+	-e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+	-e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+	-e AWS_REGION=$AWS_REGION \
+	amazon/aws-cli $@ 
+
+#::END::
