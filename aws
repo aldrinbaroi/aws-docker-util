@@ -1,20 +1,71 @@
 #!/bin/bash
 
+abort() {
+	echo "ERROR: ${1}"
+	echo "Aborting..."
+	echo ""
+	exit 1
+}
+
+iniget() {
+  if [[ $# -lt 2 || ! -f $1 ]]; then
+    echo "usage: iniget <file> [--list|<section> [key]]"
+    return 1
+  fi
+  local inifile=$1
+
+  if [ "$2" == "--list" ]; then
+    for section in $(cat $inifile | grep "\[" | sed -e 's#\[##g' | sed -e 's#\]##g'); do
+      echo $section
+    done
+    return 0
+  fi
+
+  local section=$2
+  local key
+  [ $# -eq 3 ] && key=$3
+
+  # https://stackoverflow.com/questions/49399984/parsing-ini-file-in-bash
+  # This awk line turns ini sections => [section-name]key=value
+  local lines=$(awk '/\[/{prefix=$0; next} $1{print prefix $0}' $inifile)
+  for line in $lines; do
+    if [[ "$line" = \[$section\]* ]]; then
+      local keyval=$(echo $line | sed -e "s/^\[$section\]//")
+      if [[ -z "$key" ]]; then
+        echo $keyval
+      else          
+        if [[ "$keyval" = $key=* ]]; then
+          echo $(echo $keyval | sed -e "s/^$key=//")
+        fi
+      fi
+    fi
+  done
+}
+
+# If not set then set default values
 [[ -z ${AWS_PROFILE// /} ]] && AWS_PROFILE="default"
 [[ -z ${AWS_CONFIG_DIR// /} ]] && AWS_CONFIG_DIR="$HOME/.aws"
 
 readonly CONFIG_FILE="$AWS_CONFIG_DIR/config" 
 readonly CREDENTIAL_FILE="$AWS_CONFIG_DIR/credentials"
+
+[[ ! -d ${AWS_CONFIG_DIR} ]] && abort "AWS config directory not found: ${AWS_CONFIG_DIR}"
+[[ ! -f ${CONFIG_FILE} ]] && abort "ERROR: AWS config file not found: ${CONFIG_FILE}"
+[[ ! -f ${CREDENTIAL_FILE} ]] && abort "ERROR: AWS cedentail file not found: ${CREDENTIAL_FILE}" 
+
 readonly AWS_REGION=$(iniget $CONFIG_FILE $AWS_PROFILE region)
 readonly AWS_ACCESS_KEY_ID=$(iniget $CREDENTIAL_FILE $AWS_PROFILE aws_access_key_id)
 readonly AWS_SECRET_ACCESS_KEY=$(iniget $CREDENTIAL_FILE $AWS_PROFILE aws_secret_access_key)
 
 cat << INFO
+
 =================================================
 AWS_PROFILE = $AWS_PROFILE
 AWS_REGION  = $AWS_REGION
 =================================================
 INFO
+
+[[ -z ${@// /} ]] && abort "No command supplied"
 
 docker run --rm \
 	-e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
@@ -22,4 +73,7 @@ docker run --rm \
 	-e AWS_REGION=$AWS_REGION \
 	amazon/aws-cli $@ 
 
+echo ""
+
 #::END::
+
